@@ -1,0 +1,290 @@
+﻿System Observability using ELK
+
+
+Resources 
+* Playground repo https://github.com/piomin/sample-spring-microservices-new
+* ELK Reference repo https://github.com/vikas0686/statucred-logs-example
+
+
+Logging Fundamentals (Application Level)
+* Plain Text Logging
+
+   * Basic log statements → Write simple logs to track application flow
+
+   * Log levels (INFO, ERROR, DEBUG) → Categorize logs based on severity
+
+      * Structured Logging
+
+         * JSON log format → Convert logs into structured JSON for better parsing
+
+         * Key-value logging → Attach contextual data to each log entry
+
+         * Standard log fields → Maintain consistent fields like timestamp, level, message
+
+            * Error Code Logging
+
+               * Standard error codes → Define unique codes for each error type
+
+               * Mapping errors to codes → Ensure every failure maps to a known code
+
+               * Logging error responses → Log API errors with proper codes and messages
+
+                  * Exception Logging
+
+                     * Stack trace logging → Capture full exception details for debugging
+
+                     * Exception context → Include request and payload details in logs
+
+                     * Error classification → Separate system errors from business errors
+
+Log Management (Local System)
+                        * Log Storage
+
+                           * Writing logs to files → Persist logs locally for processing
+
+                           * Log file structure → Organize logs into readable file formats
+
+                              * Log Rotation & Cleanup
+
+                                 * Timely log removal → Automatically delete old logs to save space
+
+                                 * Size-based rotation → Rotate logs when file size exceeds limit
+
+                                 * Retention policies → Define how long logs should be stored
+
+Log Shipping with Filebeat
+                                    * Filebeat Basics
+
+                                       * Role of Filebeat → Lightweight agent to ship logs to processing layer
+
+                                       * Installation & setup → Configure Filebeat on local system
+
+                                          * Input Configuration
+
+                                             * Reading log files → Define file paths to monitor logs
+
+                                             * Multiline handling → Combine multi-line logs like stack traces
+
+                                                * Output Configuration
+
+                                                   * Sending logs → Forward logs to processing systems
+
+                                                      * Running Filebeat
+
+                                                         * Start/stop service → Control Filebeat execution
+
+                                                         * Validate log flow → Ensure logs are being shipped correctly
+
+Log Processing with Logstash
+                                                            * Logstash Basics
+
+                                                               * Pipeline concept → Understand input, filter, output stages
+
+                                                                  * Input Configuration
+
+                                                                     * Receiving logs → Accept logs from Filebeat
+
+                                                                        * Filter Processing
+
+                                                                           * Parsing logs → Convert raw logs into structured format
+
+                                                                           * Field enrichment → Add metadata like service name, environment
+
+                                                                           * Data cleanup → Remove unnecessary fields
+
+                                                                              * Output Configuration
+
+                                                                                 * Sending logs → Push processed logs to storage layer
+
+Elasticsearch for Logs
+                                                                                    * Elasticsearch Basics
+
+                                                                                       * Index concept → Store logs in time-based indices
+
+                                                                                       * Document structure → Represent logs as searchable documents
+
+                                                                                          * Log Indexing
+
+                                                                                             * Storing logs → Insert processed logs into indices
+
+                                                                                             * Index strategy → Use naming conventions for scalability
+
+                                                                                                * Log Queries
+
+                                                                                                   * Searching logs → Retrieve logs using queries
+
+                                                                                                   * Filtering logs → Narrow down logs using fields
+
+                                                                                                      * Log Analysis
+
+                                                                                                         * Error trends → Identify recurring failures
+
+                                                                                                         * Pattern detection → Detect anomalies in logs
+Log Visualization with Kibana
+                                                                                                            * Kibana Basics
+
+                                                                                                               * Setup → Connect Kibana to Elasticsearch
+
+                                                                                                                  * Discover Logs
+
+                                                                                                                     * Search logs → Explore logs using filters and queries
+
+                                                                                                                     * Field filtering → Focus on specific log attributes
+
+                                                                                                                        * Log Dashboards
+
+                                                                                                                           * Error dashboards → Visualize error frequency
+
+                                                                                                                           * Request dashboards → Monitor request patterns
+
+Metrics with OpenTelemetry
+                                                                                                                              * Metrics Basics
+
+                                                                                                                                 * Metrics collection → Capture numerical system data
+
+                                                                                                                                    * Metrics Types
+
+                                                                                                                                       * Counters → Track incremental values like requests
+
+                                                                                                                                       * Gauges → Measure current state like memory usage
+
+                                                                                                                                       * Histograms → Capture latency distribution
+
+                                                                                                                                          * Application Metrics
+
+                                                                                                                                             * Request count → Track number of API calls
+
+                                                                                                                                             * Error count → Monitor failure rates
+
+                                                                                                                                             * Latency → Measure response time
+
+Advanced Metrics (P95 & Latency)
+                                                                                                                                                * Percentile Metrics
+
+                                                                                                                                                   * p50, p95, p99 → Measure performance at different percentiles
+
+                                                                                                                                                   * Latency distribution → Understand response time spread
+
+                                                                                                                                                      * Latency Measurement
+
+                                                                                                                                                         * Request duration → Track time taken per request
+
+                                                                                                                                                         * Histogram buckets → Group latency into ranges
+
+                                                                                                                                                            * Latency Graphs
+
+                                                                                                                                                               * Visualization → Plot response time trends over time
+
+
+
+
+
+System Metrics Monitoring
+                                                                                                                                                                  * System Metrics
+
+                                                                                                                                                                     * CPU usage → Monitor processor utilization
+
+                                                                                                                                                                     * Memory usage → Track memory consumption
+
+                                                                                                                                                                     * Disk usage → Observe storage usage
+
+                                                                                                                                                                        * Metrics Collection
+
+                                                                                                                                                                           * Exporting metrics → Collect system-level data
+
+                                                                                                                                                                              * Visualization
+
+                                                                                                                                                                                 * Dashboards → View system health in graphs
+
+Alerting on Logs
+                                                                                                                                                                                    * Log-Based Alerts
+
+                                                                                                                                                                                       * Error detection → Trigger alerts on error patterns
+
+                                                                                                                                                                                       * Exception monitoring → Detect critical failures
+
+                                                                                                                                                                                          * Alert Conditions
+
+                                                                                                                                                                                             * Threshold rules → Define limits for alerting
+
+                                                                                                                                                                                             * Frequency rules → Alert on repeated failures
+
+                                                                                                                                                                                                * Alert Testing
+
+                                                                                                                                                                                                   * Trigger scenarios → Validate alert behavior
+
+Alerting on Metrics
+                                                                                                                                                                                                      * Metrics-Based Alerts
+
+                                                                                                                                                                                                         * Error rate alerts → Trigger when failures exceed limit
+
+                                                                                                                                                                                                         * Latency alerts → Alert on slow responses
+
+                                                                                                                                                                                                            * Alert Rules
+
+                                                                                                                                                                                                               * Time windows → Evaluate conditions over duration
+
+                                                                                                                                                                                                               * Aggregations → Use averages and percentiles
+
+                                                                                                                                                                                                                  * Notifications
+
+                                                                                                                                                                                                                     * Channels → Send alerts via email/webhook
+
+Observability Dashboards
+                                                                                                                                                                                                                        * Log Dashboards
+
+                                                                                                                                                                                                                           * Error trends → Visualize failures over time
+
+                                                                                                                                                                                                                           * Request logs → Monitor incoming traffic
+
+                                                                                                                                                                                                                              * Metrics Dashboards
+
+                                                                                                                                                                                                                                 * Request rate → Track throughput
+
+                                                                                                                                                                                                                                 * Latency graph → Monitor response times
+
+                                                                                                                                                                                                                                 * Error rate → Observe system stability
+
+                                                                                                                                                                                                                                    * Combined View
+
+                                                                                                                                                                                                                                       * Correlation → Link logs with metrics
+
+Production Debugging Workflow
+                                                                                                                                                                                                                                          * Debug Flow
+
+                                                                                                                                                                                                                                             * Alert → Metrics → Logs → Follow structured debugging steps
+
+                                                                                                                                                                                                                                                * Root Cause Analysis
+
+                                                                                                                                                                                                                                                   * Failure identification → Locate source of issue
+
+                                                                                                                                                                                                                                                   * Request tracing → Follow request lifecycle
+
+                                                                                                                                                                                                                                                      * Failure Scenarios
+
+                                                                                                                                                                                                                                                         * High latency → Diagnose slow systems
+
+                                                                                                                                                                                                                                                         * High error rate → Investigate failures
+
+                                                                                                                                                                                                                                                         * System overload → Handle traffic spikes
+
+Production Readiness
+                                                                                                                                                                                                                                                            * Observability Checklist
+
+                                                                                                                                                                                                                                                               * Logging → Ensure all flows are logged
+
+                                                                                                                                                                                                                                                               * Metrics → Cover key system indicators
+
+                                                                                                                                                                                                                                                               * Alerts → Configure critical alerts
+
+                                                                                                                                                                                                                                                                  * Scaling Observability
+
+                                                                                                                                                                                                                                                                     * Multi-service → Handle distributed systems
+
+                                                                                                                                                                                                                                                                     * Index management → Manage log storage efficiently
+
+                                                                                                                                                                                                                                                                        * Reliability Basics
+
+                                                                                                                                                                                                                                                                           * Thresholds → Define acceptable limits
+
+                                                                                                                                                                                                                                                                           * Baselines → Establish normal system behavior

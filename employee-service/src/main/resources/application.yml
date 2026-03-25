@@ -9,3 +9,7 @@ spring:
     name: employee-service
   config:
     import: "optional:configserver:http://localhost:8088"
+
+logging:
+  file:
+    name: logs/employee-service.log

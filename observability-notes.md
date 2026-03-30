@@ -305,4 +305,65 @@ Exception Types
 
 ---
 
-*Notes last updated: Phase 1 complete*
+---
+
+## Phase 2 — Log Management (Local System)
+
+### 2.1 Log Storage
+
+Already covered in Phase 1:
+- Logs written to `logs/employee-service.log` via `logging.file.name` in `application.yml`
+- One JSON object per line — structured, machine-readable
+
+```
+application.yml
+    logging.file.name: logs/employee-service.log
+            |
+            v
+    logback-spring.xml (JSON_FILE appender)
+            |
+            v
+    logs/employee-service.log  ← active log file
+    logs/employee-service.log.2026-03-25.0.gz  ← rotated + compressed
+    logs/employee-service.log.2026-03-25.1.gz  ← second rotation same day
+```
+
+### 2.2 Log Rotation & Cleanup
+
+Uses `SizeAndTimeBasedRollingPolicy` — rotates on BOTH time and size.
+
+```xml
+<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+    <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+    <maxFileSize>10MB</maxFileSize>       <!-- rotate when active file hits 10MB -->
+    <maxHistory>7</maxHistory>            <!-- keep max 7 days of rotated files -->
+    <totalSizeCap>100MB</totalSizeCap>    <!-- delete oldest if total exceeds 100MB -->
+</rollingPolicy>
+```
+
+#### How rotation works
+
+```
+Day 1 — file grows to 10MB → rotated to employee-service.log.2026-03-25.0.gz
+       — grows again to 10MB → rotated to employee-service.log.2026-03-25.1.gz
+       — midnight → new day starts regardless of size
+
+Day 8 — Day 1 files are deleted (maxHistory=7)
+
+Any time total size > 100MB → oldest rotated file deleted (totalSizeCap)
+```
+
+#### Retention policy summary
+
+| Setting       | Value  | Meaning                                      |
+|---------------|--------|----------------------------------------------|
+| maxFileSize   | 10MB   | Rotate active file when it reaches this size |
+| maxHistory    | 7      | Keep rotated files for 7 days                |
+| totalSizeCap  | 100MB  | Hard cap on total log disk usage             |
+
+The `%i` in the filename pattern is the index — allows multiple rotations per day (0, 1, 2...).
+Rotated files are gzip compressed (`.gz`) to save disk space.
+
+---
+
+*Notes last updated: Phase 2 complete*

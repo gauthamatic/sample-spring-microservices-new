@@ -366,4 +366,178 @@ Rotated files are gzip compressed (`.gz`) to save disk space.
 
 ---
 
-*Notes last updated: Phase 2 complete*
+---
+
+## Phase 3 — Log Shipping with Filebeat
+
+### 3.1 What is Filebeat?
+
+Filebeat is a lightweight log shipper. It watches log files and forwards new lines to a destination.
+
+```
+logs/employee-service.log  (on disk)
+        |
+        | Filebeat watches for new lines
+        | remembers position in a registry file
+        v
+     Filebeat  (~50MB RAM)
+        |
+        | forwards over TCP
+        v
+     Logstash  (processes) or Elasticsearch (directly)
+```
+
+Why Filebeat instead of Logstash reading the file directly?
+- Filebeat is very lightweight — runs on every app server
+- Logstash is heavy — runs centrally, does processing
+- Filebeat handles backpressure — if Logstash is down, Filebeat remembers where it left off (registry) and resumes when it comes back
+
+### 3.2 Filebeat Input Configuration
+
+```yaml
+# filebeat/filebeat.yml
+
+filebeat.inputs:
+  - type: filestream
+    id: employee-service
+    paths:
+      - /logs/employee-service.log    # path inside Docker container
+    parsers:
+      - multiline:
+          type: pattern
+          pattern: '^\{'              # JSON log starts with {
+          negate: true                # if line does NOT start with {
+          match: after                # append it to the PREVIOUS line
+```
+
+#### Why multiline matters — stack traces
+
+Without multiline config, a stack trace becomes many separate log entries:
+```
+Line 1: {"level":"ERROR","message":"Employee not found"}   ← shipped as log 1
+Line 2:   java.util.NoSuchElementException                 ← shipped as log 2 (WRONG)
+Line 3:     at java.util.Optional.orElseThrow(...)         ← shipped as log 3 (WRONG)
+```
+
+With multiline config (lines not starting with `{` are appended to previous):
+```
+Combined: {"level":"ERROR","message":"Employee not found"}\n  java.util.NoSuchElementException\n    at ...
+                                                           ← shipped as ONE log entry (CORRECT)
+```
+
+### 3.3 Filebeat Output Configuration
+
+```yaml
+output.logstash:
+  hosts: ["logstash:5044"]    # Logstash container hostname + port
+```
+
+### 3.4 Logstash Pipeline
+
+Three stages — Input → Filter → Output:
+
+```
+         INPUT                    FILTER                      OUTPUT
+    ┌─────────────┐        ┌──────────────────┐         ┌──────────────────┐
+    │  Filebeat   │───────▶│ 1. Parse JSON    │────────▶│ Elasticsearch    │
+    │  port 5044  │        │ 2. Rename fields │         │ index per day    │
+    └─────────────┘        │ 3. Remove noise  │         └──────────────────┘
+                           └──────────────────┘
+```
+
+```ruby
+# logstash/pipeline/employee.conf
+
+filter {
+  json {
+    source => "message"           # raw log line is in "message" field
+    skip_on_invalid_json => true  # don't crash on non-JSON lines
+  }
+  mutate {
+    rename => { "level" => "log_level" }  # "level" conflicts with ES reserved field
+    remove_field => ["event", "input", "agent", "ecs", "host", "tags",
+                     "@version", "level_value", "logger_name", "thread_name"]
+  }
+}
+```
+
+#### What Logstash does to each log line
+
+```
+Raw line received from Filebeat:
+  { "message": "{\"level\":\"INFO\",\"message\":\"Employee added\",\"employeeId\":1}" }
+
+After json filter (JSON string parsed into fields):
+  { "message": "Employee added", "level": "INFO", "employeeId": 1, "service": "employee-service" }
+
+After mutate (rename + remove noise):
+  { "message": "Employee added", "log_level": "INFO", "employeeId": 1, "service": "employee-service" }
+
+Indexed into Elasticsearch:
+  index: employee-service-logs-2026.03.31
+```
+
+#### Why rename `level` → `log_level`?
+Elasticsearch ECS (Elastic Common Schema) reserves certain field names. `level` at the top level conflicts with the schema mapping — Elasticsearch rejected the documents. Renaming to `log_level` fixes it.
+
+### 3.5 Docker Compose ELK Stack
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                   docker-compose-elk.yml                 │
+│                                                          │
+│  Mac filesystem                Docker network            │
+│  ─────────────                 ──────────────            │
+│  ./employee-service/logs ──▶  Filebeat ──▶ Logstash     │
+│  ./logstash/pipeline     ──▶  Logstash config            │
+│                                    │                     │
+│                                    ▼                     │
+│                             Elasticsearch                │
+│                             port: 9200                   │
+│                             volume: es-data (persistent) │
+│                                    │                     │
+│                                    ▼                     │
+│                               Kibana                     │
+│                               port: 5601                 │
+└──────────────────────────────────────────────────────────┘
+```
+
+Key settings:
+- `xpack.security.enabled=false` — no auth for local dev
+- `ES_JAVA_OPTS=-Xms512m -Xmx512m` — limits heap, prevents RAM exhaustion
+- `healthcheck` on Elasticsearch — Logstash and Kibana wait for ES before starting
+- `es-data` named volume — data persists across container restarts
+
+### 3.6 Validating the Pipeline
+
+```bash
+# 1. Check Elasticsearch is up
+curl http://localhost:9200/_cluster/health
+
+# 2. Check index was created
+curl http://localhost:9200/_cat/indices/employee-service-logs-*?v
+
+# 3. Query logs with specific fields
+curl http://localhost:9200/employee-service-logs-2026.03.31/_search \
+  -d '{"query":{"exists":{"field":"employeeId"}}}'
+```
+
+Expected result — each log is a document with individual queryable fields:
+```json
+{ "log_level": "ERROR",  "message": "Employee not found", "errorCode": "EMP-001", "employeeId": 999 }
+{ "log_level": "INFO",   "message": "Employee added",     "employeeId": 17, "organizationId": 3 }
+{ "log_level": "DEBUG",  "message": "Employee findById request received", "employeeId": 999 }
+```
+
+### 3.7 Common Issues & Fixes
+
+| Issue | Cause | Fix |
+|---|---|---|
+| Filebeat stops shipping after restart | Registry lost, file inode changed | Restart Filebeat container |
+| `failed: 4` events in Filebeat metrics | `level` field conflicts with ES ECS mapping | Rename to `log_level` in Logstash |
+| Logstash config change not picked up | No hot-reload by default | `docker compose restart logstash` |
+| Index not created | Logstash still starting (takes ~30s) | Wait and retry |
+
+---
+
+*Notes last updated: Phase 3 complete*

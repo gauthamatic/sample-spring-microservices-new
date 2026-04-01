@@ -1,0 +1,22 @@
+filebeat.inputs:
+  - type: filestream
+    id: employee-service
+    paths:
+      - /logs/employee-service.log
+    parsers:
+      - multiline:
+          type: pattern
+          pattern: '^\{'
+          negate: true
+          match: after
+
+processors:
+  - add_fields:
+      target: ''
+      fields:
+        service: employee-service
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info

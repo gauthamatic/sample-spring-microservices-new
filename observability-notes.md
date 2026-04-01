@@ -540,4 +540,180 @@ Expected result — each log is a document with individual queryable fields:
 
 ---
 
-*Notes last updated: Phase 3 complete*
+---
+
+## Phase 4 — Elasticsearch for Logs
+
+### 4.1 Index Concept
+
+An index in Elasticsearch is like a table — it stores a collection of documents.
+We use time-based indices so old data can be dropped by deleting old indices (no expensive delete queries).
+
+```
+Elasticsearch
+    │
+    ├── employee-service-logs-2026.03.31   ← index (one per day)
+    │       ├── doc 1: { "log_level": "INFO",  "message": "Employee added", "employeeId": 1 }
+    │       ├── doc 2: { "log_level": "DEBUG", "message": "Employee findById...", "employeeId": 99 }
+    │       └── doc 3: { "log_level": "ERROR", "message": "Employee not found", "errorCode": "EMP-001" }
+    │
+    └── employee-service-logs-2026.04.01   ← new index each day
+```
+
+### 4.2 Document Structure
+
+Each log line becomes a searchable document with individual fields:
+```json
+{
+  "@timestamp": "2026-03-31T07:18:16Z",
+  "log_level":  "ERROR",
+  "message":    "Employee not found",
+  "service":    "employee-service",
+  "errorCode":  "EMP-001",
+  "employeeId": 999,
+  "stack_trace": "java.util.NoSuchElementException..."
+}
+```
+
+### 4.3 Log Queries
+
+#### Search by message (full-text)
+```json
+{ "query": { "match": { "message": "Employee added" } } }
+```
+
+#### Filter by exact field value
+```json
+{ "query": { "term": { "log_level.keyword": "ERROR" } } }
+{ "query": { "term": { "errorCode.keyword": "EMP-001" } } }
+```
+
+Note: use `.keyword` suffix for exact match on string fields. Without it, ES does full-text search.
+
+#### Filter by field existence
+```json
+{ "query": { "exists": { "field": "errorCode" } } }
+```
+
+### 4.4 Log Analysis — Aggregations
+
+Aggregations are like SQL GROUP BY — they count, sum, or bucket documents.
+
+#### Error trends — count by error code
+```json
+{
+  "size": 0,
+  "aggs": {
+    "errors_by_code": {
+      "terms": { "field": "errorCode.keyword" }
+    }
+  }
+}
+```
+Result:
+```
+EMP-001: 6 occurrences
+```
+
+#### Pattern detection — log level distribution
+```json
+{
+  "size": 0,
+  "aggs": {
+    "logs_by_level": {
+      "terms": { "field": "log_level.keyword" }
+    }
+  }
+}
+```
+Result:
+```
+INFO:  7406  ← normal traffic
+WARN:  3052  ← Eureka connection warnings
+ERROR:  619  ← worth investigating
+DEBUG:   19  ← app debug logs
+```
+
+### 4.5 Index Strategy
+
+```
+Naming convention: {service}-logs-{yyyy.MM.dd}
+  employee-service-logs-2026.03.31
+  employee-service-logs-2026.04.01
+
+Benefits:
+  - Drop old index to delete old data (fast, no scan)
+  - Query across days with wildcard: employee-service-logs-*
+  - Query specific day: employee-service-logs-2026.04.01
+```
+
+---
+
+## Phase 5 — Log Visualization with Kibana
+
+### 5.1 Setup — Create a Data View
+
+Data View tells Kibana which Elasticsearch index to read from.
+
+```
+Kibana → Stack Management → Data Views → Create data view
+  Name:            Employee Service Logs
+  Index pattern:   employee-service-logs-*     ← wildcard covers all days
+  Timestamp field: @timestamp
+```
+
+### 5.2 Discover Logs
+
+Discover is the log explorer in Kibana.
+
+```
+Kibana → Discover → select "Employee Service Logs"
+```
+
+Useful KQL (Kibana Query Language) filters:
+```
+log_level : "ERROR"                                    → only errors
+errorCode : "EMP-001"                                  → specific error code
+message : "Employee added"                             → successful adds
+log_level : "ERROR" and service : "employee-service"   → errors from our service
+employeeId : 999                                       → all logs for a specific employee
+```
+
+### 5.3 Log Dashboards
+
+```
+Kibana → Dashboard → Create dashboard → Add panel (Lens)
+```
+
+Useful visualizations:
+
+| Panel | Type | X-axis | Y-axis |
+|---|---|---|---|
+| Error count by code | Bar chart | errorCode.keyword | Count |
+| Log level distribution | Pie chart | log_level.keyword | Count |
+| Logs over time | Line chart | @timestamp (auto) | Count |
+| Top error employees | Bar chart | employeeId | Count (filter: ERROR) |
+
+### 5.4 Full Flow Summary
+
+```
+Spring App (employee-service)
+    │ writes JSON logs
+    ▼
+logs/employee-service.log
+    │ Filebeat watches & ships
+    ▼
+Logstash :5044
+    │ parses JSON, renames fields, removes noise
+    ▼
+Elasticsearch :9200
+    │ indexes as employee-service-logs-{date}
+    ▼
+Kibana :5601
+    │ Discover → search & filter logs
+    └ Dashboard → visualize trends
+```
+
+---
+
+*Notes last updated: Phase 5 complete*
